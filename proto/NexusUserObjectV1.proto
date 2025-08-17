@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+package nexus.protocol.v1;
+
+option go_package = "github.com/your-repo/digisocialblock/gen/go/nexus/protocol/v1;protocolv1";
+
+// Represents a user within the Nexus Protocol ecosystem.
+message NexusUserObjectV1 {
+  // The unique identifier for the user, typically a decentralized identifier (DID).
+  string user_id = 1;
+
+  // The user's chosen display name.
+  string display_name = 2;
+
+  // A timestamp indicating when the user object was created, in UTC seconds.
+  int64 created_timestamp = 3;
+
+  // A list of IDs for users that this user is following.
+  repeated string following_ids = 4;
+}
