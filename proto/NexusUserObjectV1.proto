@@ -2,19 +2,38 @@ syntax = "proto3";
 
 package nexus.protocol.v1;
 
-option go_package = "github.com/your-repo/digisocialblock/gen/go/nexus/protocol/v1;protocolv1";
+option go_package = "digisocialblock/gen/go/nexus/protocol/v1;protocolv1";
+
+// The status of a connection between two users.
+enum ConnectionStatus {
+  CONNECTION_STATUS_UNSPECIFIED = 0;
+  CONNECTION_STATUS_PENDING = 1;
+  CONNECTION_STATUS_ACTIVE = 2;
+  CONNECTION_STATUS_BLOCKED = 3;
+}
+
+// Represents a connection to another user.
+message NexusConnectionsV1 {
+  // The user ID of the connected user.
+  string user_id = 1;
+  // The status of the connection.
+  ConnectionStatus status = 2;
+}
 
 // Represents a user within the Nexus Protocol ecosystem.
 message NexusUserObjectV1 {
-  // The unique identifier for the user, typically a decentralized identifier (DID).
+  // The immutable user identifier (e.g., DID).
   string user_id = 1;
 
-  // The user's chosen display name.
-  string display_name = 2;
-
   // A timestamp indicating when the user object was created, in UTC seconds.
-  int64 created_timestamp = 3;
+  int64 created_timestamp = 2;
 
-  // A list of IDs for users that this user is following.
-  repeated string following_ids = 4;
+  // The user's cryptographic public key for identity verification.
+  bytes public_key = 3;
+
+  // A hash of the user's behavioral biometrics for adaptive authentication.
+  string biometric_hash = 4;
+
+  // A list of connections to other users.
+  repeated NexusConnectionsV1 connections = 5;
 }

@@ -1,0 +1,60 @@
+name: Compile Protobuf
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'proto/**.proto'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21' # Corresponds to a recent stable version
+
+      - name: Set up protoc
+        uses: arduino/setup-protoc@v2
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install Go plugins
+        run: |
+          go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.33.0
+          go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.3.0
+
+      - name: Create generation directory
+        run: mkdir -p gen/go
+
+      - name: Compile Protobuf
+        run: |
+          protoc --proto_path=proto --go_out=gen/go --go_opt=paths=source_relative \
+          --go-grpc_out=gen/go --go-grpc_opt=paths=source_relative \
+          proto/*.proto
+
+      # The following steps are for committing the generated code back to the repository
+      - name: Check for changes
+        id: git_status
+        run: |
+          if [[ -n $(git status --porcelain) ]]; then
+            echo "changes=true" >> $GITHUB_OUTPUT
+          else
+            echo "changes=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Commit and push generated files
+        if: steps.git_status.outputs.changes == 'true'
+        run: |
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+          git add gen/go
+          git commit -m "feat(gen): generate protobuf Go code"
+          git push
