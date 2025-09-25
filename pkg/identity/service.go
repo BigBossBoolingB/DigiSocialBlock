@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/BigBossBoolingB/Digital-Golem-Engine/pkg/crypto"
-	pb "github.com/BigBossBoolingB/Digital-Golem-Engine/pkg/proto"
+	nexus "github.com/BigBossBoolingB/Digital-Golem-Engine/pkg/proto/nexus/v1"
 	"github.com/google/uuid"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -17,20 +17,20 @@ import (
 // For the MVP, it uses a simple in-memory map for storage.
 type Service struct {
 	mu            sync.RWMutex
-	usersByID     map[string]*pb.NexusUserObjectV1
-	usersByHandle map[string]*pb.NexusUserObjectV1
+	usersByID     map[string]*nexus.NexusUserObjectV1
+	usersByHandle map[string]*nexus.NexusUserObjectV1
 }
 
 // NewService creates and returns a new Identity Service.
 func NewService() *Service {
 	return &Service{
-		usersByID:     make(map[string]*pb.NexusUserObjectV1),
-		usersByHandle: make(map[string]*pb.NexusUserObjectV1),
+		usersByID:     make(map[string]*nexus.NexusUserObjectV1),
+		usersByHandle: make(map[string]*nexus.NexusUserObjectV1),
 	}
 }
 
 // CreateUser creates a new user, stores it, and returns the user object.
-func (s *Service) CreateUser(publicKey []byte, handle string) (*pb.NexusUserObjectV1, error) {
+func (s *Service) CreateUser(publicKey []byte, handle string) (*nexus.NexusUserObjectV1, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -41,7 +41,7 @@ func (s *Service) CreateUser(publicKey []byte, handle string) (*pb.NexusUserObje
 
 	// Create the new user object
 	id := uuid.New().String()
-	user := &pb.NexusUserObjectV1{
+	user := &nexus.NexusUserObjectV1{
 		UserId:    id,
 		PublicKey: publicKey,
 		Handle:    handle,
@@ -56,7 +56,7 @@ func (s *Service) CreateUser(publicKey []byte, handle string) (*pb.NexusUserObje
 }
 
 // GetUserByID retrieves a user by their unique ID.
-func (s *Service) GetUserByID(id string) (*pb.NexusUserObjectV1, error) {
+func (s *Service) GetUserByID(id string) (*nexus.NexusUserObjectV1, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -91,7 +91,7 @@ func (s *Service) Authenticate(userID string, signature, nonce []byte) (bool, er
 }
 
 // GetUserByHandle retrieves a user by their unique handle.
-func (s *Service) GetUserByHandle(handle string) (*pb.NexusUserObjectV1, error) {
+func (s *Service) GetUserByHandle(handle string) (*nexus.NexusUserObjectV1, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
