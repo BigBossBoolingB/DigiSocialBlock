@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/BigBossBoolingB/Digital-Golem-Engine/pkg/crypto"
+	"github.com/BigBossBoolingB/Digital-Golem-Engine/pkg/echonet/peerstore"
 	pb "github.com/BigBossBoolingB/Digital-Golem-Engine/pkg/proto/echonet/v1"
 	"google.golang.org/protobuf/proto"
 )
@@ -17,7 +18,7 @@ func TestDiscovery_Announce(t *testing.T) {
 	}
 
 	bootstrapPeers := []string{"/ip4/127.0.0.1/tcp/4001", "/ip4/127.0.0.1/tcp/4002"}
-	service := NewService(bootstrapPeers, mockBroadcaster)
+	service := NewService(nil, bootstrapPeers, mockBroadcaster, nil)
 
 	// 2. Create local peer info and keys
 	pubKey, privKey, err := crypto.GenerateKeys()
@@ -63,7 +64,7 @@ func TestDiscovery_Announce(t *testing.T) {
 }
 
 func TestDiscovery_Announce_InvalidPeer(t *testing.T) {
-	service := NewService(nil, nil)
+	service := NewService(nil, nil, nil, nil)
 	_, privKey, _ := crypto.GenerateKeys()
 
 	err := service.Announce(nil, privKey)
@@ -74,5 +75,35 @@ func TestDiscovery_Announce_InvalidPeer(t *testing.T) {
 	err = service.Announce(&pb.PeerInfo{UserId: ""}, privKey)
 	if err == nil {
 		t.Error("Expected error when announcing with empty peer ID, but got nil")
+	}
+}
+
+func TestDiscovery_DiscoverPeers(t *testing.T) {
+	// 1. Setup mock requester and state
+	discoveredPeer := &pb.PeerInfo{UserId: "discovered-peer-1", Multiaddress: "/ip4/10.0.0.1/tcp/4001"}
+	mockRequester := func(peerAddress string, request *pb.FindPeersRequest) (*pb.FindPeersResponse, error) {
+		// Simulate a successful response from a bootstrap peer
+		return &pb.FindPeersResponse{
+			Peers: []*pb.PeerInfo{discoveredPeer},
+		}, nil
+	}
+
+	ps := peerstore.New()
+	bootstrapPeers := []string{"/ip4/127.0.0.1/tcp/4001"}
+	service := NewService(ps, bootstrapPeers, nil, mockRequester)
+
+	// 2. Call the DiscoverPeers method
+	err := service.DiscoverPeers("#testing")
+	if err != nil {
+		t.Fatalf("DiscoverPeers failed unexpectedly: %v", err)
+	}
+
+	// 3. Verify that the peer store was populated
+	retrievedPeer, found := ps.Get("discovered-peer-1")
+	if !found {
+		t.Fatal("Expected to find discovered peer in peer store, but it was not found")
+	}
+	if retrievedPeer.Multiaddress != discoveredPeer.Multiaddress {
+		t.Errorf("Expected peer address to be %s, but got %s", discoveredPeer.Multiaddress, retrievedPeer.Multiaddress)
 	}
 }
