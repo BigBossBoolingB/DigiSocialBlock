@@ -72,6 +72,7 @@ func (e *EchoNetAPI) PublishContent(args *types.PublishContentRequest, reply *ty
 
 // Server wraps the Go RPC server and our API implementation.
 type Server struct {
+	API       *EchoNetAPI
 	rpcServer *rpc.Server
 	listener  net.Listener
 }
@@ -86,6 +87,7 @@ func NewServer(ds *discovery.Service, cs *content.Service) (*Server, error) {
 	}
 
 	return &Server{
+		API:       api,
 		rpcServer: rpcServer,
 	}, nil
 }
