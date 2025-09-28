@@ -5,7 +5,9 @@ import (
 	"net"
 	"net/http"
 	"net/rpc"
+	"time"
 
+	"github.com/BigBossBoolingB/Digital-Golem-Engine/pkg/content"
 	"github.com/BigBossBoolingB/Digital-Golem-Engine/pkg/echonet/discovery"
 	"github.com/BigBossBoolingB/Digital-Golem-Engine/pkg/echonet/types"
 )
@@ -13,12 +15,14 @@ import (
 // EchoNetAPI is the struct that will be registered as our RPC service.
 type EchoNetAPI struct {
 	Discovery *discovery.Service
+	Content   *content.Service
 }
 
 // NewEchoNetAPI creates a new API handler.
-func NewEchoNetAPI(ds *discovery.Service) *EchoNetAPI {
+func NewEchoNetAPI(ds *discovery.Service, cs *content.Service) *EchoNetAPI {
 	return &EchoNetAPI{
 		Discovery: ds,
+		Content:   cs,
 	}
 }
 
@@ -43,6 +47,29 @@ func (e *EchoNetAPI) FindPeers(args *types.FindPeersRequest, reply *types.FindPe
 	return nil
 }
 
+// PublishContent is the RPC method that allows a user to publish a new piece of content.
+func (e *EchoNetAPI) PublishContent(args *types.PublishContentRequest, reply *types.PublishContentResponse) error {
+	// Transform the RPC request into the native ContentObjectV1
+	contentObj := &content.ContentObjectV1{
+		AuthorUserID:    args.AuthorUserID,
+		ContentBodyURI:  args.ContentBodyURI,
+		ContentBodyHash: args.ContentBodyHash,
+		Signature:       args.Signature,
+		CreatedAt:       time.Now(), // The service will use this timestamp
+	}
+
+	createdContent, err := e.Content.CreateContent(contentObj)
+	if err != nil {
+		return err
+	}
+
+	*reply = types.PublishContentResponse{
+		ContentID:     createdContent.ContentID,
+		StatusMessage: "Content published successfully.",
+	}
+	return nil
+}
+
 // Server wraps the Go RPC server and our API implementation.
 type Server struct {
 	rpcServer *rpc.Server
@@ -50,8 +77,8 @@ type Server struct {
 }
 
 // NewServer creates a new EchoNet RPC server that is isolated and safe for parallel tests.
-func NewServer(ds *discovery.Service) (*Server, error) {
-	api := NewEchoNetAPI(ds)
+func NewServer(ds *discovery.Service, cs *content.Service) (*Server, error) {
+	api := NewEchoNetAPI(ds, cs)
 	rpcServer := rpc.NewServer() // Create a new, isolated RPC server instance
 	err := rpcServer.Register(api)
 	if err != nil {

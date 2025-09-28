@@ -1,11 +1,13 @@
 package echonet
 
 import (
+	"crypto/sha256"
 	"fmt"
 	"net/rpc"
 	"testing"
 	"time"
 
+	"github.com/BigBossBoolingB/Digital-Golem-Engine/pkg/content"
 	"github.com/BigBossBoolingB/Digital-Golem-Engine/pkg/crypto"
 	"github.com/BigBossBoolingB/Digital-Golem-Engine/pkg/echonet/discovery"
 	"github.com/BigBossBoolingB/Digital-Golem-Engine/pkg/echonet/peerstore"
@@ -36,8 +38,9 @@ func TestServer_RPC_Announce(t *testing.T) {
 	mockUser := &identity.NexusUserObjectV1{UserId: "live-client-1", PublicKey: pubKey}
 	mockIS := &MockIdentityService{User: mockUser}
 	ps := peerstore.New()
+	cs := content.NewService(mockIS)
 	ds := discovery.NewService(mockIS, ps, nil, nil, nil)
-	server, err := NewServer(ds)
+	server, err := NewServer(ds, cs)
 	if err != nil {
 		t.Fatalf("Failed to create server: %v", err)
 	}
@@ -47,7 +50,7 @@ func TestServer_RPC_Announce(t *testing.T) {
 		t.Fatalf("Server failed to start: %v", err)
 	}
 	defer server.Stop()
-	time.Sleep(100 * time.Millisecond) // Allow server to start
+	time.Sleep(100 * time.Millisecond)
 
 	// 3. Create client and connect
 	client, err := rpc.DialHTTP("tcp", server.Address())
@@ -78,8 +81,9 @@ func TestServer_RPC_Announce(t *testing.T) {
 func TestServer_RPC_FindPeers(t *testing.T) {
 	// 1. Setup dependencies
 	ps := peerstore.New()
+	cs := content.NewService(nil)
 	ds := discovery.NewService(nil, ps, nil, nil, nil)
-	server, err := NewServer(ds)
+	server, err := NewServer(ds, cs)
 	if err != nil {
 		t.Fatalf("Failed to create server: %v", err)
 	}
@@ -111,5 +115,60 @@ func TestServer_RPC_FindPeers(t *testing.T) {
 	// 5. Verify results
 	if len(reply.Peers) != 2 {
 		t.Fatalf("Expected to find 2 peers, but got %d", len(reply.Peers))
+	}
+}
+
+func TestServer_RPC_PublishContent(t *testing.T) {
+	// 1. Setup dependencies
+	pubKey, privKey, _ := crypto.GenerateKeys()
+	mockUser := &identity.NexusUserObjectV1{UserId: "author-1", PublicKey: pubKey}
+	mockIS := &MockIdentityService{User: mockUser}
+	ps := peerstore.New()
+	cs := content.NewService(mockIS)
+	ds := discovery.NewService(mockIS, ps, nil, nil, nil)
+	server, err := NewServer(ds, cs)
+	if err != nil {
+		t.Fatalf("Failed to create server: %v", err)
+	}
+
+	// 2. Start server
+	if err := server.Start("127.0.0.1:0"); err != nil {
+		t.Fatalf("Server failed to start: %v", err)
+	}
+	defer server.Stop()
+	time.Sleep(100 * time.Millisecond)
+
+	// 3. Create client and connect
+	client, err := rpc.DialHTTP("tcp", server.Address())
+	if err != nil {
+		t.Fatalf("Failed to dial RPC server: %v", err)
+	}
+	defer client.Close()
+
+	// 4. Prepare the content and request
+	contentBody := []byte("This is a test content.")
+	contentHash := sha256.Sum256(contentBody)
+	signature := crypto.Sign(privKey, contentHash[:])
+
+	args := &types.PublishContentRequest{
+		AuthorUserID:    "author-1",
+		ContentBodyURI:  "mem://content-1",
+		ContentBodyHash: contentHash[:],
+		Signature:       signature,
+	}
+	var reply types.PublishContentResponse
+
+	// 5. Make the RPC call
+	err = client.Call("EchoNetAPI.PublishContent", args, &reply)
+	if err != nil {
+		t.Fatalf("RPC call to PublishContent failed: %v", err)
+	}
+
+	// 6. Verify the response and side-effects
+	if reply.ContentID == "" {
+		t.Error("Expected a ContentID in the response, but it was empty")
+	}
+	if _, err := cs.GetContentByID(reply.ContentID); err != nil {
+		t.Error("Expected content to be in the content service, but it was not found")
 	}
 }

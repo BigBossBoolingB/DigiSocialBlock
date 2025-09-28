@@ -32,3 +32,17 @@ type FindPeersRequest struct {
 type FindPeersResponse struct {
 	Peers []PeerInfo
 }
+
+// PublishContentRequest defines the arguments for the PublishContent RPC method.
+type PublishContentRequest struct {
+	AuthorUserID    string
+	ContentBodyURI  string
+	ContentBodyHash []byte
+	Signature       []byte
+}
+
+// PublishContentResponse defines the response for the PublishContent RPC method.
+type PublishContentResponse struct {
+	ContentID     string
+	StatusMessage string
+}
