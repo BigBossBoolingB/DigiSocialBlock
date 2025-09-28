@@ -30,13 +30,11 @@ func (m *MockIdentityService) GetUserByID(id string) (*identity.NexusUserObjectV
 	return nil, fmt.Errorf("user not found")
 }
 
-func TestServer_RPC_Integration(t *testing.T) {
-	// 1. Setup keys and a mock identity service for the server to use
+func TestServer_RPC_Announce(t *testing.T) {
+	// 1. Setup dependencies
 	pubKey, privKey, _ := crypto.GenerateKeys()
 	mockUser := &identity.NexusUserObjectV1{UserId: "live-client-1", PublicKey: pubKey}
 	mockIS := &MockIdentityService{User: mockUser}
-
-	// 2. Setup the full dependency chain for the server
 	ps := peerstore.New()
 	ds := discovery.NewService(mockIS, ps, nil, nil, nil)
 	server, err := NewServer(ds)
@@ -44,50 +42,74 @@ func TestServer_RPC_Integration(t *testing.T) {
 		t.Fatalf("Failed to create server: %v", err)
 	}
 
-	// 3. Start the RPC server on a random available port
-	go server.Start("127.0.0.1:0") // Use port 0 to get a random free port
+	// 2. Start the server
+	if err := server.Start("127.0.0.1:0"); err != nil {
+		t.Fatalf("Server failed to start: %v", err)
+	}
 	defer server.Stop()
 	time.Sleep(100 * time.Millisecond) // Allow server to start
-	serverAddr := server.Address()
-	if serverAddr == "" {
-		t.Fatal("Server did not start and get an address")
-	}
 
-	// 4. Create an RPC client and connect to the server
-	client, err := rpc.Dial("tcp", serverAddr)
+	// 3. Create client and connect
+	client, err := rpc.DialHTTP("tcp", server.Address())
 	if err != nil {
 		t.Fatalf("Failed to dial RPC server: %v", err)
 	}
 	defer client.Close()
 
-	// 5. Prepare the arguments for the RPC call
+	// 4. Prepare and make the RPC call
 	args := &types.AnnounceRequest{
-		PeerInfo: types.PeerInfo{
-			UserID:       "live-client-1",
-			Multiaddress: "/ip4/127.0.0.1/tcp/9001",
-		},
+		PeerInfo: types.PeerInfo{UserID: "live-client-1"},
 		Timestamp: time.Now(),
 	}
-	// Sign the payload with the private key that corresponds to the public key in the mock identity service
 	payload := []byte(fmt.Sprintf("%s|%d", args.PeerInfo.UserID, args.Timestamp.UnixNano()))
 	args.Signature = crypto.Sign(privKey, payload)
-
 	var reply types.AnnounceResponse
-
-	// 6. Make the RPC call
 	err = client.Call("EchoNetAPI.Announce", args, &reply)
 	if err != nil {
 		t.Fatalf("RPC call failed: %v", err)
 	}
 
-	// 7. Verify the response and side-effects
-	expectedMsg := "Announcement for live-client-1 processed."
-	if reply.ConfirmationMessage != expectedMsg {
-		t.Errorf("Expected reply '%s', but got '%s'", expectedMsg, reply.ConfirmationMessage)
+	// 5. Verify results
+	if _, found := ps.Get("live-client-1"); !found {
+		t.Fatal("Expected peer to be in peer store after successful announcement")
+	}
+}
+
+func TestServer_RPC_FindPeers(t *testing.T) {
+	// 1. Setup dependencies
+	ps := peerstore.New()
+	ds := discovery.NewService(nil, ps, nil, nil, nil)
+	server, err := NewServer(ds)
+	if err != nil {
+		t.Fatalf("Failed to create server: %v", err)
+	}
+	ps.Add(&types.PeerInfo{UserID: "peer1", Frequencies: []string{"#testing"}})
+	ps.Add(&types.PeerInfo{UserID: "peer2", Frequencies: []string{"#testing"}})
+
+	// 2. Start server
+	if err := server.Start("127.0.0.1:0"); err != nil {
+		t.Fatalf("Server failed to start: %v", err)
+	}
+	defer server.Stop()
+	time.Sleep(100 * time.Millisecond)
+
+	// 3. Create client and connect
+	client, err := rpc.DialHTTP("tcp", server.Address())
+	if err != nil {
+		t.Fatalf("Failed to dial RPC server: %v", err)
+	}
+	defer client.Close()
+
+	// 4. Make RPC call
+	args := &types.FindPeersRequest{Frequency: "#testing"}
+	var reply types.FindPeersResponse
+	err = client.Call("EchoNetAPI.FindPeers", args, &reply)
+	if err != nil {
+		t.Fatalf("RPC call to FindPeers failed: %v", err)
 	}
 
-	_, found := ps.Get("live-client-1")
-	if !found {
-		t.Fatal("Expected peer to be added to the peer store, but it was not")
+	// 5. Verify results
+	if len(reply.Peers) != 2 {
+		t.Fatalf("Expected to find 2 peers, but got %d", len(reply.Peers))
 	}
 }

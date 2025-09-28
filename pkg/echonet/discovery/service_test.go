@@ -74,6 +74,42 @@ func TestDiscovery_ProcessAnnouncement(t *testing.T) {
 	}
 }
 
+func TestDiscovery_FindPeers_Local(t *testing.T) {
+	ps := peerstore.New()
+	ps.Add(&types.PeerInfo{UserID: "peer1", Frequencies: []string{"#go", "#testing"}})
+	ps.Add(&types.PeerInfo{UserID: "peer2", Frequencies: []string{"#rust", "#testing"}})
+	ps.Add(&types.PeerInfo{UserID: "peer3", Frequencies: []string{"#go"}})
+
+	service := NewService(nil, ps, nil, nil, nil)
+
+	// Find peers for #testing
+	testingPeers, err := service.FindPeers("#testing")
+	if err != nil {
+		t.Fatalf("FindPeers for #testing failed: %v", err)
+	}
+	if len(testingPeers) != 2 {
+		t.Errorf("Expected 2 peers for #testing, got %d", len(testingPeers))
+	}
+
+	// Find peers for #go
+	goPeers, err := service.FindPeers("#go")
+	if err != nil {
+		t.Fatalf("FindPeers for #go failed: %v", err)
+	}
+	if len(goPeers) != 2 {
+		t.Errorf("Expected 2 peers for #go, got %d", len(goPeers))
+	}
+
+	// Find peers for #rust
+	rustPeers, err := service.FindPeers("#rust")
+	if err != nil {
+		t.Fatalf("FindPeers for #rust failed: %v", err)
+	}
+	if len(rustPeers) != 1 {
+		t.Errorf("Expected 1 peer for #rust, got %d", len(rustPeers))
+	}
+}
+
 func TestDiscovery_DiscoverPeers(t *testing.T) {
 	discoveredPeer := types.PeerInfo{UserID: "discovered-peer-1"}
 	mockRequester := func(peerAddress string, request *types.FindPeersRequest) (*types.FindPeersResponse, error) {

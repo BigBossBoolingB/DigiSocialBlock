@@ -64,6 +64,23 @@ func (s *Service) Announce(localPeer types.PeerInfo, privateKey ed25519.PrivateK
 	return nil
 }
 
+// FindPeers retrieves a list of peers from the local peer store that are interested in a given frequency.
+func (s *Service) FindPeers(frequency string) ([]types.PeerInfo, error) {
+	allPeers := s.peerStore.List()
+	matchingPeers := make([]types.PeerInfo, 0)
+
+	for _, peer := range allPeers {
+		for _, f := range peer.Frequencies {
+			if f == frequency {
+				matchingPeers = append(matchingPeers, *peer)
+				break // Move to the next peer once a match is found
+			}
+		}
+	}
+
+	return matchingPeers, nil
+}
+
 // ProcessAnnouncement validates an incoming announcement and adds the peer to the store.
 func (s *Service) ProcessAnnouncement(req *types.AnnounceRequest) error {
 	if req == nil {

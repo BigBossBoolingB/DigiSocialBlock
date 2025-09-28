@@ -3,6 +3,7 @@ package echonet
 import (
 	"log"
 	"net"
+	"net/http"
 	"net/rpc"
 
 	"github.com/BigBossBoolingB/Digital-Golem-Engine/pkg/echonet/discovery"
@@ -32,30 +33,37 @@ func (e *EchoNetAPI) Announce(args *types.AnnounceRequest, reply *types.Announce
 	return nil
 }
 
-// Server wraps the Go RPC server and our API implementation.
-type Server struct {
-	api      *EchoNetAPI
-	listener net.Listener
+// FindPeers is the RPC method that allows a peer to find other peers by frequency.
+func (e *EchoNetAPI) FindPeers(args *types.FindPeersRequest, reply *types.FindPeersResponse) error {
+	peers, err := e.Discovery.FindPeers(args.Frequency)
+	if err != nil {
+		return err
+	}
+	reply.Peers = peers
+	return nil
 }
 
-// NewServer creates a new EchoNet RPC server.
+// Server wraps the Go RPC server and our API implementation.
+type Server struct {
+	rpcServer *rpc.Server
+	listener  net.Listener
+}
+
+// NewServer creates a new EchoNet RPC server that is isolated and safe for parallel tests.
 func NewServer(ds *discovery.Service) (*Server, error) {
 	api := NewEchoNetAPI(ds)
-	err := rpc.Register(api)
+	rpcServer := rpc.NewServer() // Create a new, isolated RPC server instance
+	err := rpcServer.Register(api)
 	if err != nil {
-		// Ignore "service already defined" error which can happen during hot-reloading in tests.
-		if err.Error() != "rpc: service already defined: EchoNetAPI" {
-			return nil, err
-		}
+		return nil, err
 	}
-	rpc.HandleHTTP() // Use default HTTP handlers
 
 	return &Server{
-		api: api,
+		rpcServer: rpcServer,
 	}, nil
 }
 
-// Start begins listening for RPC requests on the given address.
+// Start begins listening for HTTP RPC requests on the given address.
 func (s *Server) Start(address string) error {
 	l, err := net.Listen("tcp", address)
 	if err != nil {
@@ -63,7 +71,9 @@ func (s *Server) Start(address string) error {
 	}
 	s.listener = l
 	log.Printf("EchoNet RPC server listening on %s", s.Address())
-	go rpc.Accept(l)
+
+	// Serve the isolated RPC server over HTTP. This is safe for parallel tests.
+	go http.Serve(l, s.rpcServer)
 	return nil
 }
 
