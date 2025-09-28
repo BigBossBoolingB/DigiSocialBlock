@@ -31,8 +31,11 @@ help:
 .PHONY: proto-gen
 proto-gen:
 	@echo ">> Generating Go code from .proto files..."
-	$(PROTOC) --go_out=$(PKG_DIR) --go_opt=paths=source_relative \
-		--go-grpc_out=$(PKG_DIR) --go-grpc_opt=paths=source_relative \
+	$(PROTOC) \
+		--plugin=protoc-gen-go=$(shell go env GOPATH)/bin/protoc-gen-go \
+		--plugin=protoc-gen-twirp=$(shell go env GOPATH)/bin/protoc-gen-twirp \
+		--go_out=$(PKG_DIR) --go_opt=paths=source_relative \
+		--twirp_out=$(PKG_DIR) --twirp_opt=paths=source_relative \
 		$(PROTO_DIR)/*.proto
 	@echo ">> Protocol Buffers generated successfully."
 
